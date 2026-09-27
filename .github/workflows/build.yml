@@ -25,22 +25,19 @@ jobs:
           channel: 'stable'
 
       - name: باز کردن فایل زیپ پروژه
-        run: unzip -o petlist_test.zip
+        run: unzip -o petlist_test.zip -x ".github/*"
 
       - name: ساخت فایل‌های پلتفرم اندروید
-        working-directory: petlist_test
         run: flutter create --platforms=android --project-name petlist_test .
 
       - name: دریافت پکیج‌ها
-        working-directory: petlist_test
         run: flutter pub get
 
       - name: ساخت فایل APK
-        working-directory: petlist_test
         run: flutter build apk --release
 
       - name: بارگذاری فایل APK ساخته‌شده
         uses: actions/upload-artifact@v4
         with:
           name: petlist-apk
-          path: petlist_test/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
