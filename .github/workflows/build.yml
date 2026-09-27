@@ -32,11 +32,11 @@ jobs:
       - name: دریافت پکیج‌ها
         run: flutter pub get
 
-      - name: ساخت فایل APK
-        run: flutter build apk --release
+      - name: ساخت فایل APK تستی
+        run: flutter build apk --debug
 
       - name: بارگذاری فایل APK ساخته‌شده
         uses: actions/upload-artifact@v4
         with:
           name: petlist-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
