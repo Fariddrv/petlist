@@ -1,0 +1,46 @@
+name: ساخت فایل نصبی (APK)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: دریافت کد پروژه
+        uses: actions/checkout@v4
+
+      - name: نصب Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: نصب Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: باز کردن فایل زیپ پروژه
+        run: unzip -o petlist_test.zip
+
+      - name: ساخت فایل‌های پلتفرم اندروید
+        working-directory: petlist_test
+        run: flutter create --platforms=android --project-name petlist_test .
+
+      - name: دریافت پکیج‌ها
+        working-directory: petlist_test
+        run: flutter pub get
+
+      - name: ساخت فایل APK
+        working-directory: petlist_test
+        run: flutter build apk --release
+
+      - name: بارگذاری فایل APK ساخته‌شده
+        uses: actions/upload-artifact@v4
+        with:
+          name: petlist-apk
+          path: petlist_test/build/app/outputs/flutter-apk/app-release.apk
