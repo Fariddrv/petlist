@@ -18,10 +18,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: نصب Flutter
+      - name: نصب Flutter (آخرین نسخه پایدار)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
           channel: 'stable'
 
       - name: باز کردن فایل زیپ پروژه
