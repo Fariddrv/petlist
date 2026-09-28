@@ -12,24 +12,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Unzip project (clean old code first)
+      - name: Show repository content
+        run: ls -la
+
+      - name: Extract project from zip
         run: |
-          set -e
           if [ -f petlist_test.zip ]; then
-            unzip -l petlist_test.zip
-            rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md
-            rm -rf _unz && mkdir -p _unz
-            unzip -o petlist_test.zip -d _unz
+            unzip -l petlist_test.zip || true
+            rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md || true
+            rm -rf _unz; mkdir -p _unz
+            unzip -o petlist_test.zip -d _unz || true
             PUB=$(find _unz -name pubspec.yaml | head -1)
-            if [ -z "$PUB" ]; then echo "pubspec.yaml not found in zip"; exit 1; fi
-            SRC=$(dirname "$PUB")
-            echo "project root: $SRC"
-            cp -rf "$SRC"/. .
+            if [ -n "$PUB" ]; then
+              cp -rf "$(dirname "$PUB")"/. .
+            fi
             rm -rf _unz
           else
-            echo "no zip found, using repo files"
+            echo "no zip found, using files already in repo"
           fi
-          grep -E "^version" pubspec.yaml
+          echo "----- files now -----"
+          ls -la
+          echo "----- pubspec version -----"
+          if [ -f pubspec.yaml ]; then grep -E "^version" pubspec.yaml; else echo "NO pubspec.yaml"; fi
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -40,42 +44,31 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
       - name: Prepare android project
         run: flutter create --platforms=android --org com.example --project-name petlist_test .
 
-      # ==== این بخش آیکون اختصاصی را جایگزین آیکون پیش‌فرض فلاتر می‌کند ====
       - name: Apply custom launcher icon
         run: |
-          set -e
           RES=android/app/src/main/res
-          echo "--- icon files inside zip ---"
-          find icon -type f
-          echo "--- removing flutter default mipmaps (including adaptive icon) ---"
-          rm -rf "$RES"/mipmap-*
-          echo "--- copying our icons ---"
-          cp -rf icon/mipmap-* "$RES"/
-          # اگر فلاتر آیکون تطبیقی (adaptive) ساخته باشد، حذفش می‌کنیم تا png ما برنده شود
-          rm -f "$RES"/mipmap-anydpi-v26/ic_launcher*.xml
-          echo "--- final launcher icons in project ---"
-          find "$RES" -name "ic_launcher*" -exec ls -la {} \;
-      # ====================================================================
+          if [ -d icon ]; then
+            rm -rf "$RES"/mipmap-* || true
+            cp -rf icon/mipmap-* "$RES"/
+            rm -f "$RES"/mipmap-anydpi-v26/ic_launcher*.xml || true
+          fi
+          echo "----- final launcher icons -----"
+          find "$RES" -name "ic_launcher*" -exec ls -la {} \; || true
 
       - name: Pub get
         run: flutter pub get
 
       - name: Build APK
-        run: |
-          flutter build apk --release
-          flutter build apk --debug
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: petlist-apk-v140
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
