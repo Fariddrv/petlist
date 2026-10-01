@@ -19,7 +19,7 @@ jobs:
         run: |
           if [ -f petlist_test.zip ]; then
             unzip -l petlist_test.zip || true
-            rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md || true
+            rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md tool supabase || true
             rm -rf _unz; mkdir -p _unz
             unzip -o petlist_test.zip -d _unz || true
             PUB=$(find _unz -name pubspec.yaml | head -1)
@@ -50,6 +50,15 @@ jobs:
       - name: Prepare android project
         run: flutter create --platforms=android --org com.example --project-name petlist_test .
 
+      - name: Add internet permission
+        run: |
+          F=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "android.permission.INTERNET" "$F"; then
+            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$F"
+          fi
+          echo "----- INTERNET permission check -----"
+          grep -n "INTERNET" "$F"
+
       - name: Apply custom launcher icon
         run: |
           RES=android/app/src/main/res
@@ -70,5 +79,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: petlist-apk-v140
+          name: petlist-apk
           path: build/app/outputs/flutter-apk/app-release.apk
