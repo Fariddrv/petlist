@@ -12,13 +12,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show repository content
-        run: ls -la
-
       - name: Extract project from zip
         run: |
           if [ -f petlist_test.zip ]; then
-            unzip -l petlist_test.zip || true
             rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md tool supabase || true
             rm -rf _unz; mkdir -p _unz
             unzip -o petlist_test.zip -d _unz || true
@@ -30,10 +26,7 @@ jobs:
           else
             echo "no zip found, using files already in repo"
           fi
-          echo "----- files now -----"
-          ls -la
-          echo "----- pubspec version -----"
-          if [ -f pubspec.yaml ]; then grep -E "^version" pubspec.yaml; else echo "NO pubspec.yaml"; fi
+          grep -E "^version" pubspec.yaml || echo "NO pubspec.yaml"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -50,14 +43,8 @@ jobs:
       - name: Prepare android project
         run: flutter create --platforms=android --org com.example --project-name petlist_test .
 
-      - name: Add internet permission
-        run: |
-          F=android/app/src/main/AndroidManifest.xml
-          if ! grep -q "android.permission.INTERNET" "$F"; then
-            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$F"
-          fi
-          echo "----- INTERNET permission check -----"
-          grep -n "INTERNET" "$F"
+      - name: Android setup from project
+        run: python3 tool/android_setup.py
 
       - name: Apply custom launcher icon
         run: |
@@ -67,8 +54,6 @@ jobs:
             cp -rf icon/mipmap-* "$RES"/
             rm -f "$RES"/mipmap-anydpi-v26/ic_launcher*.xml || true
           fi
-          echo "----- final launcher icons -----"
-          find "$RES" -name "ic_launcher*" -exec ls -la {} \; || true
 
       - name: Pub get
         run: flutter pub get
