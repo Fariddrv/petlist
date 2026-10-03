@@ -11,22 +11,37 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Extract project from zip
+      - name: Extract project from newest zip
         run: |
-          if [ -f petlist_test.zip ]; then
-            rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md tool supabase || true
-            rm -rf _unz; mkdir -p _unz
-            unzip -o petlist_test.zip -d _unz || true
-            PUB=$(find _unz -name pubspec.yaml | head -1)
-            if [ -n "$PUB" ]; then
-              cp -rf "$(dirname "$PUB")"/. .
-            fi
-            rm -rf _unz
-          else
-            echo "no zip found, using files already in repo"
+          ZIP=""
+          BEST=-1
+          for f in *.zip; do
+            [ -f "$f" ] || continue
+            T=$(git log -1 --format=%ct -- "$f" 2>/dev/null || echo 0)
+            echo "found zip: $f (commit time $T)"
+            if [ "${T:-0}" -gt "$BEST" ]; then BEST=$T; ZIP="$f"; fi
+          done
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: no .zip file found in the repository root"
+            ls -la
+            exit 1
           fi
-          grep -E "^version" pubspec.yaml || echo "NO pubspec.yaml"
+          echo "using zip: $ZIP"
+          rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md tool supabase || true
+          rm -rf _unz; mkdir -p _unz
+          unzip -o "$ZIP" -d _unz
+          PUB=$(find _unz -name pubspec.yaml | head -1)
+          if [ -z "$PUB" ]; then
+            echo "ERROR: pubspec.yaml not found inside $ZIP"
+            exit 1
+          fi
+          cp -rf "$(dirname "$PUB")"/. .
+          rm -rf _unz
+          grep -E "^version" pubspec.yaml
+          ls tool
 
       - name: Set up Java
         uses: actions/setup-java@v4
