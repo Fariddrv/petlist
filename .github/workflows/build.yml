@@ -3,18 +3,21 @@ name: Build APK 2.8
 on:
   push:
     branches: [main, master]
+
   workflow_dispatch:
     inputs:
       project_zip:
         description: 'Exact ZIP filename (optional)'
         required: false
+
       marketplace_enabled:
         description: 'Restore marketplace UI (also enable it on server)'
         type: boolean
         default: false
+
       build_number:
         description: 'Android build number; use a higher number for rollback'
-        default: '25'
+        default: '26'
 
 permissions:
   contents: read
@@ -23,6 +26,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,33 +37,33 @@ jobs:
           python3 - <<'PY'
           import os, pathlib, zipfile
 
-          root=pathlib.Path.cwd()
-          requested=os.environ.get('PROJECT_ZIP','')
+          root = pathlib.Path.cwd()
+          requested = os.environ.get('PROJECT_ZIP', '')
 
           if requested:
-              archive=root/requested
+              archive = root / requested
               if archive.parent != root or archive.suffix != '.zip' or not archive.is_file():
                   raise SystemExit('ZIP must be a filename in repository root')
           else:
-              candidates=list(root.glob('pawpet2.8.0*.zip'))
-              if len(candidates)!=1:
-                  raise SystemExit('Keep exactly one pawpet2.8.0*.zip, or select its filename manually')
-              archive=candidates[0]
+              candidates = list(root.glob('pawpet2.8.1*.zip'))
+              if len(candidates) != 1:
+                  raise SystemExit('Keep exactly one pawpet2.8.1*.zip, or select its filename manually')
+              archive = candidates[0]
 
-          out=root/'project'
+          out = root / 'project'
           out.mkdir(exist_ok=True)
 
           with zipfile.ZipFile(archive) as z:
               for item in z.infolist():
-                  if not (out/item.filename).resolve().is_relative_to(out.resolve()):
+                  if not (out / item.filename).resolve().is_relative_to(out.resolve()):
                       raise SystemExit('Unsafe ZIP path')
               z.extractall(out)
 
-          pubs=list(out.rglob('pubspec.yaml'))
-          if len(pubs)!=1 or pubs[0].parent != out:
+          pubs = list(out.rglob('pubspec.yaml'))
+          if len(pubs) != 1 or pubs[0].parent != out:
               raise SystemExit('Expected one project at ZIP root')
 
-          print('Building:',archive.name)
+          print('Building:', archive.name)
           PY
 
       - uses: actions/setup-java@v4
@@ -79,11 +83,13 @@ jobs:
           flutter create --platforms=android --org com.example --project-name petlist_test .
           rm -f test/widget_test.dart
           python3 tool/android_setup.py
+
           RES=android/app/src/main/res
           if [ -d icon ]; then
             rm -rf "$RES"/mipmap-*
             cp -rf icon/mipmap-* "$RES"/
           fi
+
           flutter pub get
 
       - uses: actions/setup-node@v4
@@ -106,12 +112,12 @@ jobs:
         working-directory: project
         env:
           MARKETPLACE_MODE: ${{ inputs.marketplace_enabled || 'false' }}
-          APK_BUILD_NUMBER: ${{ inputs.build_number || '25' }}
+          APK_BUILD_NUMBER: ${{ inputs.build_number || '26' }}
         run: flutter build apk --release --build-number="$APK_BUILD_NUMBER" --dart-define=MARKETPLACE_ENABLED="$MARKETPLACE_MODE"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pawpet-2.8.0-test-apk
+          name: pawpet-2.8.1-test-apk
           path: |
             project/build/app/outputs/flutter-apk/app-release.apk
             project/pubspec.lock
