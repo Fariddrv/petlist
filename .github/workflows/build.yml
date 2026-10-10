@@ -1,83 +1,118 @@
-name: Build APK
+name: Build APK 2.8
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
+    inputs:
+      project_zip:
+        description: 'Exact ZIP filename (optional)'
+        required: false
+      marketplace_enabled:
+        description: 'Restore marketplace UI (also enable it on server)'
+        type: boolean
+        default: false
+      build_number:
+        description: 'Android build number; use a higher number for rollback'
+        default: '25'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Extract project from newest zip
+      - name: Extract one explicit project
+        env:
+          PROJECT_ZIP: ${{ inputs.project_zip }}
         run: |
-          ZIP=""
-          BEST=-1
-          for f in *.zip; do
-            [ -f "$f" ] || continue
-            T=$(git log -1 --format=%ct -- "$f" 2>/dev/null || echo 0)
-            echo "found zip: $f (commit time $T)"
-            if [ "${T:-0}" -gt "$BEST" ]; then BEST=$T; ZIP="$f"; fi
-          done
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: no .zip file found in the repository root"
-            ls -la
-            exit 1
-          fi
-          echo "using zip: $ZIP"
-          rm -rf lib assets icon android pubspec.yaml pubspec.lock README.md tool supabase || true
-          rm -rf _unz; mkdir -p _unz
-          unzip -o "$ZIP" -d _unz
-          PUB=$(find _unz -name pubspec.yaml | head -1)
-          if [ -z "$PUB" ]; then
-            echo "ERROR: pubspec.yaml not found inside $ZIP"
-            exit 1
-          fi
-          cp -rf "$(dirname "$PUB")"/. .
-          rm -rf _unz
-          grep -E "^version" pubspec.yaml
-          ls tool
+          python3 - <<'PY'
+          import os, pathlib, zipfile
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+          root=pathlib.Path.cwd()
+          requested=os.environ.get('PROJECT_ZIP','')
+
+          if requested:
+              archive=root/requested
+              if archive.parent != root or archive.suffix != '.zip' or not archive.is_file():
+                  raise SystemExit('ZIP must be a filename in repository root')
+          else:
+              candidates=list(root.glob('pawpet2.8.0*.zip'))
+              if len(candidates)!=1:
+                  raise SystemExit('Keep exactly one pawpet2.8.0*.zip, or select its filename manually')
+              archive=candidates[0]
+
+          out=root/'project'
+          out.mkdir(exist_ok=True)
+
+          with zipfile.ZipFile(archive) as z:
+              for item in z.infolist():
+                  if not (out/item.filename).resolve().is_relative_to(out.resolve()):
+                      raise SystemExit('Unsafe ZIP path')
+              z.extractall(out)
+
+          pubs=list(out.rglob('pubspec.yaml'))
+          if len(pubs)!=1 or pubs[0].parent != out:
+              raise SystemExit('Expected one project at ZIP root')
+
+          print('Building:',archive.name)
+          PY
+
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: '3.35.7'
+          channel: stable
           cache: true
 
-      - name: Prepare android project
-        run: flutter create --platforms=android --org com.example --project-name petlist_test .
-
-      - name: Android setup from project
-        run: python3 tool/android_setup.py
-
-      - name: Apply custom launcher icon
+      - name: Prepare Android
+        working-directory: project
         run: |
+          flutter create --platforms=android --org com.example --project-name petlist_test .
+          rm -f test/widget_test.dart
+          python3 tool/android_setup.py
           RES=android/app/src/main/res
           if [ -d icon ]; then
-            rm -rf "$RES"/mipmap-* || true
+            rm -rf "$RES"/mipmap-*
             cp -rf icon/mipmap-* "$RES"/
-            rm -f "$RES"/mipmap-anydpi-v26/ic_launcher*.xml || true
           fi
+          flutter pub get
 
-      - name: Pub get
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: petlist-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          node-version: '22'
+
+      - name: Database policy tests
+        working-directory: project/tool/db_test
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
+      - name: Analyze and test
+        working-directory: project
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test
+
+      - name: Build test APK
+        working-directory: project
+        env:
+          MARKETPLACE_MODE: ${{ inputs.marketplace_enabled || 'false' }}
+          APK_BUILD_NUMBER: ${{ inputs.build_number || '25' }}
+        run: flutter build apk --release --build-number="$APK_BUILD_NUMBER" --dart-define=MARKETPLACE_ENABLED="$MARKETPLACE_MODE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pawpet-2.8.0-test-apk
+          path: |
+            project/build/app/outputs/flutter-apk/app-release.apk
+            project/pubspec.lock
+          if-no-files-found: error
