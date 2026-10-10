@@ -14,7 +14,7 @@ on:
         default: false
       build_number:
         description: 'Android build number; use a higher number for rollback'
-        default: '29'
+        default: '30'
 
 permissions:
   contents: read
@@ -40,9 +40,9 @@ jobs:
               if archive.parent != root or archive.suffix != '.zip' or not archive.is_file():
                   raise SystemExit('ZIP must be a filename in repository root')
           else:
-              candidates=list(root.glob('pawpet2.8.4*.zip'))
+              candidates=list(root.glob('pawpet2.8.5*.zip'))
               if len(candidates)!=1:
-                  raise SystemExit('Keep exactly one pawpet2.8.4*.zip, or select its filename manually')
+                  raise SystemExit('Keep exactly one pawpet2.8.5*.zip, or select its filename manually')
               archive=candidates[0]
           out=root/'project'
           out.mkdir(exist_ok=True)
@@ -101,12 +101,12 @@ jobs:
         working-directory: project
         env:
           MARKETPLACE_MODE: ${{ inputs.marketplace_enabled || 'false' }}
-          APK_BUILD_NUMBER: ${{ inputs.build_number || '29' }}
+          APK_BUILD_NUMBER: ${{ inputs.build_number || '30' }}
         run: flutter build apk --release --build-number="$APK_BUILD_NUMBER" --dart-define=MARKETPLACE_ENABLED="$MARKETPLACE_MODE"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pawpet-2.8.4-test-apk
+          name: pawpet-2.8.5-test-apk
           path: |
             project/build/app/outputs/flutter-apk/app-release.apk
             project/pubspec.lock
